@@ -1,3 +1,4 @@
 openai
 simple-salesforce
 requests
+python-dotenv

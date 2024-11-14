@@ -1,17 +1,20 @@
-import requests
 import openai
-from simple_salesforce import Salesforce
 import smtplib
+import requests
+from dotenv import dotenv_values
 from email.mime.text import MIMEText
+from simple_salesforce import Salesforce
 from email.mime.multipart import MIMEMultipart
 
+config = dotenv_values(".env")
+
 # Salesforce Authentication (replace with your credentials)
-sf = Salesforce(username='your_salesforce_username',
-                password='your_salesforce_password',
-                security_token='your_salesforce_security_token')
+sf = Salesforce(username=config.get("SALESFORCE_USERNAME"),
+                password=config.get("SALESFORCE_PASSWORD"),
+                security_token=config.get("SALESFORCE_TOKEN"))
 
 # OpenAI API Key (replace with your key)
-openai.api_key = 'your_openai_api_key'
+openai.api_key = config.get("OPEN_API_KEY")
 
 # Function to fetch customer journey data from Salesforce
 def get_salesforce_data(account_id):

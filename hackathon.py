@@ -1,7 +1,6 @@
 import sys
 import time
 import smtplib
-import requests
 from openai import AzureOpenAI
 from dotenv import dotenv_values
 from email.mime.text import MIMEText
@@ -19,9 +18,6 @@ sf = Salesforce(instance='ort--hackathon.sandbox.my.salesforce.com',
 
 print("SalesForce initialized")
 
-# OpenAI API Key (replace with your key)
-# openai.api_key = config.get("OPEN_API_KEY")
-
 client = AzureOpenAI(
   azure_endpoint = "https://ortthackathon.openai.azure.com",
   api_key= config.get("OPEN_API_KEY"),
@@ -30,7 +26,7 @@ client = AzureOpenAI(
  
 assistant = client.beta.assistants.create(
   model="gpt-4o", # replace with model deployment name.
-  instructions="tell me a joke",
+  instructions="You are working with SalesForce data to try to determine the next best steps for prospective clients and how we can get deals closed",
   tools=[],
   tool_resources={},
   temperature=1,
@@ -173,9 +169,9 @@ def create_sales_task(account_id, task_subject):
 # Function to send an email notification to the sales rep
 def send_email_notification(account_id, subject, body):
     # Example email sender configuration
-    sender_email = "your_email@example.com"
-    receiver_email = "sales_rep_email@example.com"
-    password = "your_email_password"
+    sender_email = config.get("SENDER_EMAIL")
+    receiver_email = config.get("TO_EMAIL")
+    password = config.get("EMAIL_PASSWORD")
     
     # Create the email content
     message = MIMEMultipart()
@@ -188,7 +184,7 @@ def send_email_notification(account_id, subject, body):
     
     # Send email
     try:
-        with smtplib.SMTP("smtp.example.com", 587) as server:
+        with smtplib.SMTP(config.get("SMTP_SERVER"), int(config.get("SMTP_PORT"))) as server:
             server.starttls()
             server.login(sender_email, password)
             text = message.as_string()

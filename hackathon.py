@@ -1,6 +1,7 @@
 import sys
 import time
 import smtplib
+import json
 from openai import AzureOpenAI
 from dotenv import dotenv_values
 from email.mime.text import MIMEText
@@ -64,7 +65,7 @@ def call_openai(prompt):
                 thread_id=thread.id
             )
             #print(messages)
-            return messages
+            return messages.data[0].content[0].text.value
         elif run.status == 'requires_action':
             # the assistant requires calling some functions
             # and submit the tool outputs back to the run
@@ -76,41 +77,50 @@ def call_openai(prompt):
 def get_salesforce_data(account_id):
     # Fetching customer data from Salesforce (e.g., Account and Opportunity)
     account = sf.Account.get(account_id)
-    opportunities = sf.query(f"SELECT Id, Name, StageName, CloseDate FROM Opportunity WHERE AccountId = '{account_id}'")
+    account_contacts = sf.query(f"select id,name,email__c,(select name,email,(select id,description,status,subject from tasks) from contacts) from account  where id ='{account_id}'")
     
-    # Extract data: Account info and Opportunities
+    contacts = []
+    tasks = []
+    for contact in account_contacts["records"][0]["Contacts"]["records"]:
+        contacts.append({"email":contact["Email"],"name":contact["Name"]})
+        for task in contact["Tasks"]["records"]:
+            tasks.append({"Description":task["Description"],
+                          "Subject":task["Status"],
+                          "Status":task["Status"],
+                          "Contact":contact["Name"]
+                          })
+
+
+
+    print(contacts)
+    # Extract data: Account info
     account_info = {
-        "Account Name": account["Name"],
-        "Industry": account.get("Industry", "N/A"),
-        "Website": account.get("Website", "N/A"),
+        "Account Name": account_contacts["records"][0]["Name"],
+        "Contacts": contacts,
+        "tasks": tasks
     }
 
-    opportunities_data = [{
-        "Opportunity Id": opp["Id"],
-        "Opportunity Name": opp["Name"],
-        "Stage": opp["StageName"],
-        "Close Date": opp["CloseDate"]
-    } for opp in opportunities["records"]]
+
+    print(account_info)
     
-    return account_info, opportunities_data
+    return account_info
 
 # Function to generate customer journey insights using OpenAI
-def generate_journey_insights(account_info, opportunities_data):
+def generate_journey_insights(account_info):
     # Formulate a prompt for GPT-4
     journey_prompt = f"""
-    The customer with the following details has entered the sales pipeline:
+    We are doing a daily update for our agents and are reviewing the following account and its history:
     
     Account Info:
     Name: {account_info["Account Name"]}
-    Industry: {account_info["Industry"]}
-    Website: {account_info["Website"]}
+    The account has the following contacts: {account_info["Contacts"]}
     
-    Opportunities:
+    We have had the past interactions with the company recently:
     """
     
-    for opp in opportunities_data:
+    for opp in account_info["tasks"]:
         journey_prompt += f"""
-        - {opp['Opportunity Name']} (Stage: {opp['Stage']} | Close Date: {opp['Close Date']})
+        - {opp})
         """
     
     journey_prompt += """
@@ -121,7 +131,7 @@ def generate_journey_insights(account_info, opportunities_data):
     response = call_openai(journey_prompt)
     
     # Return the generated insights
-    return response.choices[0].text.strip()
+    return response
 
 # Function to automate next step execution based on OpenAI insights
 def execute_next_steps(account_id, insights):
@@ -196,23 +206,47 @@ def send_email_notification(account_id, subject, body):
 # Function to automate customer journey tracking and insights generation
 def generate_customer_journey(account_id):
     # Fetch Salesforce Data
-    account_info, opportunities_data = get_salesforce_data(account_id)
+    account_info = get_salesforce_data(account_id)
     
     # Generate insights using OpenAI
-    insights = generate_journey_insights(account_info, opportunities_data)
-    
-    # Print the generated insights
+    insights = generate_journey_insights(account_info)
     print(f"Customer Journey Insights for {account_info['Account Name']}:\n")
     print(insights)
+
+    x = call_openai("tell a joke")
+    print(x)
+    
+    for contact in account_info["Contacts"]:
+        # Print the generated insights
+        print(insights)
+        prompt = f"""
+        We are doing a daily update for our agents and are reviewing the following account and its history:
+        
+        Account Info:
+        Name: {account_info["Account Name"]}
+        The account has the following contacts: {account_info["Contacts"]}
+        
+        We have had the past interactions with the company recently:
+        """
+        
+        for opp in account_info["tasks"]:
+            prompt += f"""
+            - {opp})
+            """
+        
+        prompt += """
+        Based on the information above, write an email to {contact}.
+        """
+    z = call_openai(prompt)
+    print(z)
     
     # Execute next steps based on the generated insights
     execute_next_steps(account_id, insights)
 
-'''
+
 # Example usage: Replace with an actual Salesforce Account ID
-account_id = '0012b00000Xz4l7AAB'
+account_id = '001TH00000DMZkiYAH'
 generate_customer_journey(account_id)
-'''
 
 
 output = call_openai("tell me a joke")

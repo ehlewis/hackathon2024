@@ -27,7 +27,7 @@ client = AzureOpenAI(
  
 assistant = client.beta.assistants.create(
   model="gpt-4o", # replace with model deployment name.
-  instructions="You are working with SalesForce data to try to determine the next best steps for prospective clients and how we can get deals closed",
+  instructions="You are working with SalesForce data to try to determine the next best steps for prospective clients in the title insurance industry and how we can get deals closed",
   tools=[],
   tool_resources={},
   temperature=1,
@@ -203,6 +203,27 @@ def send_email_notification(account_id, subject, body):
     except Exception as e:
         print(f"Failed to send email: {e}")
 
+def follow_up_email(account_info, contact_name):
+    prompt = f"""
+    We are doing a daily update for our agents and are reviewing the following account and its history:
+    
+    Account Info:
+    Name: {account_info["Account Name"]}
+    The account has the following contacts: {account_info["Contacts"]}
+    
+    We have had the past interactions with the company recently:
+    """
+    
+    for opp in account_info["tasks"]:
+        prompt += f"""
+        - {opp})
+        """
+    
+    prompt += """
+    Based on the information above, write an email to """ + contact_name + """ and nothing else.
+    """
+    return call_openai(prompt)
+
 # Function to automate customer journey tracking and insights generation
 def generate_customer_journey(account_id):
     # Fetch Salesforce Data
@@ -213,32 +234,15 @@ def generate_customer_journey(account_id):
     print(f"Customer Journey Insights for {account_info['Account Name']}:\n")
     print(insights)
 
-    x = call_openai("tell a joke")
-    print(x)
-    
+    for x in range(0,6):
+            print("Sleeping to avoid rate limiting...")
+            time.sleep(10)
     for contact in account_info["Contacts"]:
-        # Print the generated insights
-        print(insights)
-        prompt = f"""
-        We are doing a daily update for our agents and are reviewing the following account and its history:
-        
-        Account Info:
-        Name: {account_info["Account Name"]}
-        The account has the following contacts: {account_info["Contacts"]}
-        
-        We have had the past interactions with the company recently:
-        """
-        
-        for opp in account_info["tasks"]:
-            prompt += f"""
-            - {opp})
-            """
-        
-        prompt += """
-        Based on the information above, write an email to {contact}.
-        """
-    z = call_openai(prompt)
-    print(z)
+        email = follow_up_email(account_info, contact["name"])
+        print(email)
+        for x in range(0,6):
+            print("Sleeping to avoid rate limiting...")
+            time.sleep(10)
     
     # Execute next steps based on the generated insights
     execute_next_steps(account_id, insights)

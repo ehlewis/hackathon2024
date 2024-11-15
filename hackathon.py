@@ -9,12 +9,15 @@ from simple_salesforce import Salesforce
 from email.mime.multipart import MIMEMultipart
 
 config = dotenv_values(".env")
-'''
+
 # Salesforce Authentication (replace with your credentials)
-sf = Salesforce(username=config.get("SALESFORCE_USERNAME"),
+sf = Salesforce(instance='ort--hackathon.sandbox.my.salesforce.com',
+                username=config.get("SALESFORCE_USERNAME"),
                 password=config.get("SALESFORCE_PASSWORD"),
-                security_token=config.get("SALESFORCE_TOKEN"))
-'''
+                security_token=config.get("SALESFORCE_TOKEN"),
+                domain="test")
+
+print("SalesForce initialized")
 
 # OpenAI API Key (replace with your key)
 # openai.api_key = config.get("OPEN_API_KEY")
@@ -64,7 +67,7 @@ def call_openai(prompt):
             messages = client.beta.threads.messages.list(
                 thread_id=thread.id
             )
-            print(messages)
+            #print(messages)
             return messages
         elif run.status == 'requires_action':
             # the assistant requires calling some functions
@@ -119,7 +122,7 @@ def generate_journey_insights(account_info, opportunities_data):
     """
 
     # Call OpenAI to generate insights
-    response = azure_openai_api_call(journey_prompt)
+    response = call_openai(journey_prompt)
     
     # Return the generated insights
     return response.choices[0].text.strip()

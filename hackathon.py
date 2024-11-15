@@ -124,12 +124,14 @@ def generate_journey_insights(account_info):
         """
     
     journey_prompt += """
-    Based on the information above, provide personalized recommendations on the next steps for this account and potential pitfalls. Keep it short and concise and do not use markdown. Plain text only.
+    Based on the information above, provide personalized recommendations on the next steps for this account and potential pitfalls. 
+    Limit of 3 recommendations and one pitfall. 
+    Keep it short and concise and do not use markdown. Plain text only.
     """
 
     # Call OpenAI to generate insights
     response = call_openai(journey_prompt)
-    
+    response = response.replace("\r", "<br>").replace("\n", "<br>") 
     # Return the generated insights
     return response
 
@@ -195,7 +197,7 @@ def generate_follow_up_email(account_info, contact_name):
     prompt += """
     Based on the information above, write an email to """ + contact_name + """ and nothing else.
     """
-    return call_openai(prompt)
+    return call_openai(prompt).replace("\r", "<br>").replace("\n", "<br>") 
 
 def generate_account_sentiment(account_info):
     prompt = f"""
@@ -216,7 +218,7 @@ def generate_account_sentiment(account_info):
     prompt += """
     Based on the information above, what is the current sentiment of the client and likelihood of conversion. Keep it short and concise, do not use markdown, plain text only.
     """
-    return call_openai(prompt)
+    return call_openai(prompt).replace("\r", "<br>").replace("\n", "<br>") 
 
 def please_dont_rate_limit_me():
     for x in range(0,3):

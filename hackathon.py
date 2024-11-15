@@ -77,12 +77,12 @@ def call_openai(prompt):
 def get_salesforce_data(account_id):
     # Fetching customer data from Salesforce (e.g., Account and Opportunity)
     account = sf.Account.get(account_id)
-    account_contacts = sf.query(f"select id,name,email__c,(select name,email,(select id,description,status,subject from tasks) from contacts) from account  where id ='{account_id}'")
+    account_contacts = sf.query(f"select id,name,email__c,(select id,name,email,(select id,description,status,subject from tasks) from contacts) from account  where id ='{account_id}'")
     
     contacts = []
     tasks = []
     for contact in account_contacts["records"][0]["Contacts"]["records"]:
-        contacts.append({"email":contact["Email"],"name":contact["Name"]})
+        contacts.append({"email":contact["Email"],"name":contact["Name"],"id":contact["Id"]})
         for task in contact["Tasks"]["records"]:
             tasks.append({"Description":task["Description"],
                           "Subject":task["Status"],
@@ -124,7 +124,7 @@ def generate_journey_insights(account_info):
         """
     
     journey_prompt += """
-    Based on the information above, provide personalized recommendations on the next steps for this account and potential risks.
+    Based on the information above, provide personalized recommendations on the next steps for this account and potential pitfalls. Keep it short and concise and do not use markdown. Plain text only.
     """
 
     # Call OpenAI to generate insights
@@ -141,17 +141,17 @@ def execute_next_steps(account_id, insights):
     if "schedule a final demo" in insights.lower():
         update_opportunity_stage(account_id, 'Demo Scheduled')
         create_sales_task(account_id, "Schedule a final demo with the client")
-        send_email_notification(account_id, "Demo Scheduled", "You need to schedule a final demo with the client before the deal closes.")
+        #send_email_notification(account_id, "Demo Scheduled", "You need to schedule a final demo with the client before the deal closes.")
 
     if "send personalized content" in insights.lower():
         update_opportunity_stage(account_id, 'Sent Content')
         create_sales_task(account_id, "Send personalized content and case studies to the client.")
-        send_email_notification(account_id, "Content Sent", "You need to send personalized content to the client to nurture the relationship.")
+        #send_email_notification(account_id, "Content Sent", "You need to send personalized content to the client to nurture the relationship.")
 
     if "offer discount" in insights.lower():
         update_opportunity_stage(account_id, 'Discount Offered')
         create_sales_task(account_id, "Offer a discount to close the deal.")
-        send_email_notification(account_id, "Discount Offered", "You need to offer a discount to close the deal.")
+        #send_email_notification(account_id, "Discount Offered", "You need to offer a discount to close the deal.")
     
     print("Next steps have been executed.")
 
@@ -176,34 +176,7 @@ def create_sales_task(account_id, task_subject):
     })
     print(f"Created task: {task_subject}")
 
-# Function to send an email notification to the sales rep
-def send_email_notification(account_id, subject, body):
-    # Example email sender configuration
-    sender_email = config.get("SENDER_EMAIL")
-    receiver_email = config.get("TO_EMAIL")
-    password = config.get("EMAIL_PASSWORD")
-    
-    # Create the email content
-    message = MIMEMultipart()
-    message["From"] = sender_email
-    message["To"] = receiver_email
-    message["Subject"] = f"Action Needed for Account {account_id}: {subject}"
-    
-    # Email body
-    message.attach(MIMEText(body, "plain"))
-    
-    # Send email
-    try:
-        with smtplib.SMTP(config.get("SMTP_SERVER"), int(config.get("SMTP_PORT"))) as server:
-            server.starttls()
-            server.login(sender_email, password)
-            text = message.as_string()
-            server.sendmail(sender_email, receiver_email, text)
-        print("Email notification sent.")
-    except Exception as e:
-        print(f"Failed to send email: {e}")
-
-def follow_up_email(account_info, contact_name):
+def generate_follow_up_email(account_info, contact_name):
     prompt = f"""
     We are doing a daily update for our agents and are reviewing the following account and its history:
     
@@ -224,35 +197,68 @@ def follow_up_email(account_info, contact_name):
     """
     return call_openai(prompt)
 
-# Function to automate customer journey tracking and insights generation
-def generate_customer_journey(account_id):
-    # Fetch Salesforce Data
-    account_info = get_salesforce_data(account_id)
+def generate_account_sentiment(account_info):
+    prompt = f"""
+    We are doing a daily update for our agents and are reviewing the following account and its history:
     
-    # Generate insights using OpenAI
-    insights = generate_journey_insights(account_info)
-    print(f"Customer Journey Insights for {account_info['Account Name']}:\n")
-    print(insights)
+    Account Info:
+    Name: {account_info["Account Name"]}
+    The account has the following contacts: {account_info["Contacts"]}
+    
+    We have had the past interactions with the company recently:
+    """
+    
+    for opp in account_info["tasks"]:
+        prompt += f"""
+        - {opp})
+        """
+    
+    prompt += """
+    Based on the information above, what is the current sentiment of the client and likelihood of conversion. Keep it short and concise, do not use markdown, plain text only.
+    """
+    return call_openai(prompt)
 
-    for x in range(0,6):
+def please_dont_rate_limit_me():
+    for x in range(0,3):
             print("Sleeping to avoid rate limiting...")
             time.sleep(10)
-    for contact in account_info["Contacts"]:
-        email = follow_up_email(account_info, contact["name"])
-        print(email)
-        for x in range(0,6):
-            print("Sleeping to avoid rate limiting...")
-            time.sleep(10)
-    
-    # Execute next steps based on the generated insights
-    execute_next_steps(account_id, insights)
+
 
 
 # Example usage: Replace with an actual Salesforce Account ID
 account_id = '001TH00000DMZkiYAH'
-generate_customer_journey(account_id)
 
+# Fetch Salesforce Data
+account_info = get_salesforce_data(account_id)
 
-output = call_openai("tell me a joke")
-print(output.data[0].content[0].text.value)
-sys.exit(0)
+# Generate insights using OpenAI
+insights = generate_journey_insights(account_info)
+print(f"Customer Journey Insights for {account_info['Account Name']}:\n")
+print(insights)
+
+emails = []
+for contact in account_info["Contacts"]:
+    please_dont_rate_limit_me()
+    email = generate_follow_up_email(account_info, contact["name"])
+    print(email)
+    emails.append({"id":contact["id"], "content": email})
+
+please_dont_rate_limit_me()
+
+sentiment = generate_account_sentiment(account_info)
+print(sentiment)
+
+# Execute next steps based on the generated insights
+# execute_next_steps(account_id, insights)
+
+# Palpatine 003TH00000JraDsYAJ
+
+for contact in account_info["Contacts"]:
+    sf.Contact.update(contact["id"],{'OpenAI_Sentiment__c': sentiment})
+    print("Updated contact with sentiment")
+    sf.Contact.update(contact["id"],{'OpenAI_Summary__c': insights})
+    print("Updated contact with summary")
+
+for email in emails:
+    sf.Contact.update(email["id"],{'OpenAI_Email__c': email["content"]})
+    print("Updated contact with suggested email")

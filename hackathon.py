@@ -1,20 +1,77 @@
-import openai
+import sys
+import time
 import smtplib
 import requests
+from openai import AzureOpenAI
 from dotenv import dotenv_values
 from email.mime.text import MIMEText
 from simple_salesforce import Salesforce
 from email.mime.multipart import MIMEMultipart
 
 config = dotenv_values(".env")
-
+'''
 # Salesforce Authentication (replace with your credentials)
 sf = Salesforce(username=config.get("SALESFORCE_USERNAME"),
                 password=config.get("SALESFORCE_PASSWORD"),
                 security_token=config.get("SALESFORCE_TOKEN"))
+'''
 
 # OpenAI API Key (replace with your key)
-openai.api_key = config.get("OPEN_API_KEY")
+# openai.api_key = config.get("OPEN_API_KEY")
+
+client = AzureOpenAI(
+  azure_endpoint = "https://ortthackathon.openai.azure.com",
+  api_key= config.get("OPEN_API_KEY"),
+  api_version="2024-05-01-preview"
+)
+ 
+assistant = client.beta.assistants.create(
+  model="gpt-4o", # replace with model deployment name.
+  instructions="tell me a joke",
+  tools=[],
+  tool_resources={},
+  temperature=1,
+  top_p=1
+)
+
+
+def call_openai(prompt):
+    # Create a thread
+    thread = client.beta.threads.create()
+    
+    # Add a user question to the thread
+    message = client.beta.threads.messages.create(
+    thread_id=thread.id,
+    role="user",
+    content=prompt # Replace this with your prompt
+    )
+    
+    # Run the thread
+    run = client.beta.threads.runs.create(
+    thread_id=thread.id,
+    assistant_id=assistant.id
+    )
+    
+    # Looping until the run completes or fails
+    while run.status in ['queued', 'in_progress', 'cancelling']:
+        time.sleep(1)
+        run = client.beta.threads.runs.retrieve(
+            thread_id=thread.id,
+            run_id=run.id
+        )
+        
+        if run.status == 'completed':
+            messages = client.beta.threads.messages.list(
+                thread_id=thread.id
+            )
+            print(messages)
+            return messages
+        elif run.status == 'requires_action':
+            # the assistant requires calling some functions
+            # and submit the tool outputs back to the run
+            pass
+        else:
+            print(run.status)
 
 # Function to fetch customer journey data from Salesforce
 def get_salesforce_data(account_id):
@@ -62,12 +119,7 @@ def generate_journey_insights(account_info, opportunities_data):
     """
 
     # Call OpenAI to generate insights
-    response = openai.Completion.create(
-        model="gpt-4", 
-        prompt=journey_prompt, 
-        max_tokens=200, 
-        temperature=0.7
-    )
+    response = azure_openai_api_call(journey_prompt)
     
     # Return the generated insights
     return response.choices[0].text.strip()
@@ -157,6 +209,13 @@ def generate_customer_journey(account_id):
     # Execute next steps based on the generated insights
     execute_next_steps(account_id, insights)
 
+'''
 # Example usage: Replace with an actual Salesforce Account ID
 account_id = '0012b00000Xz4l7AAB'
 generate_customer_journey(account_id)
+'''
+
+
+output = call_openai("tell me a joke")
+print(output.data[0].content[0].text.value)
+sys.exit(0)

@@ -1,12 +1,7 @@
-import sys
 import time
-import smtplib
-import json
 from openai import AzureOpenAI
 from dotenv import dotenv_values
-from email.mime.text import MIMEText
 from simple_salesforce import Salesforce
-from email.mime.multipart import MIMEMultipart
 
 config = dotenv_values(".env")
 
